@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicMoments on Polygon</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.0.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@maticnetwork/maticjs@latest/dist/matic.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        input, textarea { display: block; width: 100%; margin-bottom: 10px; padding: 5px; }
+        button { padding: 10px; background-color: #8247e5; color: white; border: none; cursor: pointer; }
+        .timestamp { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>MusicMoments on Polygon</h1>
+    
+    <form id="timestampForm">
+        <input type="text" id="songTitle" placeholder="Song Title" required>
+        <input type="text" id="artist" placeholder="Artist" required>
+        <input type="text" id="startTime" placeholder="Start Time (e.g. 1:23)" required>
+        <input type="text" id="endTime" placeholder="End Time (e.g. 1:33)" required>
+        <textarea id="comment" placeholder="Your comment" required></textarea>
+        <button type="submit">Share Timestamp</button>
+    </form>
+    
+    <h2>Shared Timestamps</h2>
+    <div id="timestampsList"></div>
+
+    <script>
+        const CONTRACT_ADDRESS = '0xFE873370684dca0b93fa795082ECe70b8D4F8228';
+        const CONTRACT_ABI = [
+            "function createTimestamp(string memory _songTitle, string memory _artist, string memory _startTime, string memory _endTime, string memory _comment) public",
+            "function getTimestamp(uint256 _id) public view returns (string memory songTitle, string memory artist, string memory startTime, string memory endTime, address creator, string memory comment)",
+            "function getTimestampCount() public view returns (uint256)"
+        ];
+
+        let contract;
+
+        async function initializeContract() {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    const provider = new ethers.providers.Web3Provider(window.ethereum);
+                    const signer = provider.getSigner();
+                    
+                    // Check if we're on the Polygon network
+                    const network = await provider.getNetwork();
+                    if (network.chainId !== 137) { // Polygon Mainnet
+                        alert('Please switch to the Polygon network in your wallet');
+                        return;
+                    }
+
+                    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+                    fetchTimestamps();
+                } catch (error) {
+                    console.error("Failed to initialize contract:", error);
+                }
+            } else {
+                console.log('Please install MetaMask!');
+            }
+        }
+
+        async function fetchTimestamps() {
+            try {
+                const count = await contract.getTimestampCount();
+                const timestampsList = document.getElementById('timestampsList');
+                timestampsList.innerHTML = '';
+                for (let i = 1; i <= count; i++) {
+                    const timestamp = await contract.getTimestamp(i);
+                    const timestampElement = document.createElement('div');
+                    timestampElement.className = 'timestamp';
+                    timestampElement.innerHTML = `
+                        <h3>${timestamp.songTitle} - ${timestamp.artist}</h3>
+                        <p>Time: ${timestamp.startTime} - ${timestamp.endTime}</p>
+                        <p>Comment: ${timestamp.comment}</p>
+                        <p>Shared by: ${timestamp.creator}</p>
+                    `;
+                    timestampsList.appendChild(timestampElement);
+                }
+            } catch (error) {
+                console.error("Failed to fetch timestamps:", error);
+            }
+        }
+
+        document.getElementById('timestampForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (!contract) return;
+            try {
+                const tx = await contract.createTimestamp(
+                    document.getElementById('songTitle').value,
+                    document.getElementById('artist').value,
+                    document.getElementById('startTime').value,
+                    document.getElementById('endTime').value,
+                    document.getElementById('comment').value
+                );
+                await tx.wait();
+                console.log("Timestamp created successfully!");
+                fetchTimestamps();
+                event.target.reset();
+            } catch (error) {
+                console.error("Failed to create timestamp:", error);
+            }
+        });
+
+        initializeContract();
+    </script>
+</body>
+</html>
